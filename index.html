@@ -1,16 +1,24 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
-    <script src="main.js"></script> 
-    <link rel="stylesheet" href="style.css">   
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <sp-heading>Layers</sp-heading>
-  <sp-body id="layers">
-    No layers
-  </sp-body>
-  <footer>
-    <sp-button id="btnPopulate">Populate Layers</sp-button>
-  </footer>
+  <sp-heading>OKLCH Color</sp-heading>
+  <label class="field">
+    <span>Lightness (L)</span>
+    <input id="lightness" type="number" min="0" max="1" step="0.01" value="0.7">
+  </label>
+  <label class="field">
+    <span>Chroma (C)</span>
+    <input id="chroma" type="number" min="0" max="0.4" step="0.01" value="0.15">
+  </label>
+  <label class="field">
+    <span>Hue (H)</span>
+    <input id="hue" type="number" min="0" max="360" step="1" value="250">
+  </label>
+  <sp-body id="oklch-value">oklch(0.7 0.15 250)</sp-body>
+  <script src="main.js"></script>
 </body>
 </html>
