@@ -24,11 +24,29 @@ const fields = [
   { id: "hue", min: 0, max: 360, value: 250 },
 ];
 
+function getPreviewTextColor(color) {
+  // Use the quantized sRGB channels represented by the preview's HEX background.
+  const linear = [color.r255, color.g255, color.b255].map(channel => {
+    const value = channel / 255;
+    return value <= 0.04045
+      ? value / 12.92
+      : Math.pow((value + 0.055) / 1.055, 2.4);
+  });
+  const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  const blackContrast = (luminance + 0.05) / 0.05;
+  const whiteContrast = 1.05 / (luminance + 0.05);
+  return blackContrast >= whiteContrast ? "#000000" : "#FFFFFF";
+}
+
 function updateOklchText() {
   document.getElementById("oklch-value").textContent =
     `oklch(${fields.map(field => field.value).join(" ")})`;
 
   const color = oklchToSrgb(fields[0].value, fields[1].value, fields[2].value);
+  document.getElementById("color-preview").style.backgroundColor = color.hex;
+  const previewHex = document.getElementById("preview-hex");
+  previewHex.textContent = color.hex;
+  previewHex.style.color = getPreviewTextColor(color);
   document.getElementById("rgb-value").textContent =
     `RGB: ${color.r255}, ${color.g255}, ${color.b255}`;
   document.getElementById("hex-value").textContent = `HEX: ${color.hex}`;

@@ -84,7 +84,7 @@ const root = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const elements = {};
 for (const match of html.matchAll(/id="([^"]+)"/g)) {
-  elements[match[1]] = { textContent: "", listeners: {},
+  elements[match[1]] = { textContent: "", style: {}, listeners: {},
     addEventListener(event, callback) { this.listeners[event] = callback; } };
 }
 for (const match of html.matchAll(/<input id="([^"]+)"[^>]*value="([^"]+)"/g)) {
@@ -108,18 +108,29 @@ function expectOutput(L, C, H) {
   assert.equal(elements["rgb-value"].textContent, `RGB: ${color.r255}, ${color.g255}, ${color.b255}`);
   assert.equal(elements["hex-value"].textContent, `HEX: ${color.hex}`);
   assert.equal(elements["gamut-value"].textContent, `Gamut: ${color.inGamut ? "sRGB" : "Out of sRGB"}`);
+  assert.equal(elements["color-preview"].style.backgroundColor, color.hex);
+  assert.equal(elements["preview-hex"].textContent, color.hex);
 }
 expectOutput(0.7, 0.15, 250);
+assert.equal(elements["color-preview"].style.backgroundColor, "#4BA3F7");
+assert.equal(elements["preview-hex"].style.color, "#000000");
 edit("lightness", "0.6");
 expectOutput(0.6, 0.15, 250);
+edit("hue", "120");
+expectOutput(0.6, 0.15, 120);
+edit("hue", "250");
 edit("lightness", "0.7");
 edit("chroma", "0.4");
 expectOutput(0.7, 0.4, 250);
+assert.equal(elements["color-preview"].style.backgroundColor, "#0085FF");
+assert.equal(elements["gamut-value"].textContent, "Gamut: Out of sRGB");
 for (const [id, min, max] of [["lightness", 0, 1], ["chroma", 0, 0.4], ["hue", 0, 360]]) {
   edit(id, "-10"); assert.equal(Number(elements[id].value), min);
   edit(id, "999"); assert.equal(Number(elements[id].value), max);
   const before = elements["rgb-value"].textContent;
+  const previewBefore = elements["color-preview"].style.backgroundColor;
   edit(id, ""); assert.equal(elements["rgb-value"].textContent, before);
+  assert.equal(elements["color-preview"].style.backgroundColor, previewBefore);
   edit(id, "", "blur"); assert.equal(Number(elements[id].value), max);
   for (const invalid of ["abc", "NaN", "Infinity"]) {
     edit(id, invalid, "change"); assert.equal(Number(elements[id].value), max);
@@ -128,4 +139,15 @@ for (const [id, min, max] of [["lightness", 0, 1], ["chroma", 0, 0.4], ["hue", 0
 expectOutput(1, 0.4, 360);
 edit("chroma", "0", "change");
 expectOutput(1, 0, 360);
+assert.equal(elements["preview-hex"].style.color, "#000000");
+edit("lightness", "0");
+expectOutput(0, 0, 360);
+assert.equal(elements["preview-hex"].style.color, "#FFFFFF");
+edit("lightness", "0.5");
+expectOutput(0.5, 0, 360);
+assert.equal(elements["preview-hex"].style.color, "#FFFFFF");
+edit("lightness", "0.8");
+expectOutput(0.8, 0, 360);
+assert.equal(elements["preview-hex"].style.color, "#000000");
 console.log("PASS: UI initialization, live RGB/HEX/gamut updates, bounds and invalid-input recovery");
+console.log("PASS: preview background/HEX updates, light/dark text contrast and clipped out-of-gamut preview");
