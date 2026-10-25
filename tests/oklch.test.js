@@ -81,6 +81,53 @@ console.log("PASS: black, white, neutrals, primaries, gamma branches, gamut and 
 
 // Exercise the actual main.js handlers with the actual HTML IDs/defaults.
 const root = path.join(__dirname, "..");
+const modalCalls = [];
+const foregroundWrites = [];
+const submittedColors = [];
+const apiErrors = [];
+let insideModal = false;
+let modalFailure;
+let assignmentFailure;
+let pauseModal = false;
+let resumeModal;
+let conversionCount = 0;
+let lastConvertedColor;
+const mockApp = {
+  SolidColor: class {
+    constructor() {
+      assert.equal(insideModal, true);
+      this.rgb = {};
+    }
+  },
+  set foregroundColor(color) {
+    assert.equal(insideModal, true);
+    if (assignmentFailure) throw assignmentFailure;
+    foregroundWrites.push(color);
+  },
+};
+const foregroundModule = { exports: {} };
+vm.runInNewContext(fs.readFileSync(path.join(root, "photoshop/foreground.js"), "utf8"), {
+  module: foregroundModule,
+  require(name) {
+    assert.equal(name, "photoshop");
+    return {
+      app: mockApp,
+      core: {
+        async executeAsModal(callback, options) {
+          modalCalls.push(options);
+          if (modalFailure) throw modalFailure;
+          if (pauseModal) await new Promise(resolve => { resumeModal = resolve; });
+          insideModal = true;
+          try {
+            return await callback();
+          } finally {
+            insideModal = false;
+          }
+        },
+      },
+    };
+  },
+});
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const elements = {};
 for (const match of html.matchAll(/id="([^"]+)"/g)) {
@@ -93,10 +140,21 @@ for (const match of html.matchAll(/<input id="([^"]+)"[^>]*value="([^"]+)"/g)) {
 vm.runInNewContext(fs.readFileSync(path.join(root, "main.js"), "utf8"), {
   require(name) {
     if (name === "uxp") return { entrypoints: { setup() {} } };
+    if (name === "./photoshop/foreground.js") return {
+      setForegroundColor(color) {
+        submittedColors.push(color);
+        return foregroundModule.exports.setForegroundColor(color);
+      },
+    };
     assert.equal(name, "./color/oklch.js");
-    return { oklchToSrgb };
+    return { oklchToSrgb(...coordinates) {
+      conversionCount += 1;
+      lastConvertedColor = oklchToSrgb(...coordinates);
+      return lastConvertedColor;
+    } };
   },
   document: { getElementById(id) { assert.ok(elements[id], id); return elements[id]; } },
+  console: { error(...args) { apiErrors.push(args); } },
 });
 function edit(id, value, event = "input") {
   elements[id].value = value;
@@ -151,3 +209,73 @@ expectOutput(0.8, 0, 360);
 assert.equal(elements["preview-hex"].style.color, "#000000");
 console.log("PASS: UI initialization, live RGB/HEX/gamut updates, bounds and invalid-input recovery");
 console.log("PASS: preview background/HEX updates, light/dark text contrast and clipped out-of-gamut preview");
+
+async function testForeground() {
+  const button = elements["set-foreground"];
+  const status = elements["foreground-status"];
+  edit("lightness", "0.7");
+  edit("chroma", "0.15");
+  edit("hue", "250");
+  expectOutput(0.7, 0.15, 250);
+  assert.equal(modalCalls.length, 0, "loading/editing must not modify Photoshop");
+  assert.equal(foregroundWrites.length, 0);
+  assert.equal(status.textContent, "");
+
+  const conversionsBeforeClick = conversionCount;
+  const applied = button.listeners.click();
+  assert.equal(submittedColors[0], lastConvertedColor, "reuse the displayed conversion result");
+  assert.equal(conversionCount, conversionsBeforeClick, "click must not run another conversion");
+  assert.equal(button.disabled, true);
+  assert.equal(status.textContent, "Setting foreground color...");
+  await button.listeners.click();
+  assert.equal(modalCalls.length, 1, "ignore repeated clicks while busy");
+  await applied;
+  assert.equal(button.disabled, false);
+  assert.equal(status.textContent, "Foreground color set: #4BA3F7");
+  assert.equal(modalCalls[0].commandName, "Set Foreground Color");
+  assert.ok(foregroundWrites[0] instanceof mockApp.SolidColor);
+  assert.deepEqual(foregroundWrites[0].rgb, { red: 75, green: 163, blue: 247 });
+
+  edit("chroma", "0.4");
+  expectOutput(0.7, 0.4, 250);
+  assert.equal(status.textContent, "");
+  assert.equal(foregroundWrites.length, 1);
+  pauseModal = true;
+  const pending = button.listeners.click();
+  edit("hue", "120");
+  expectOutput(0.7, 0.4, 120);
+  assert.equal(modalCalls.length, 2);
+  resumeModal();
+  await pending;
+  pauseModal = false;
+  assert.deepEqual(foregroundWrites[1].rgb, { red: 0, green: 133, blue: 255 });
+  assert.equal(status.textContent, "Foreground color set: #0085FF", "report the color captured at click time");
+  assert.equal(elements["gamut-value"].textContent, "Gamut: Out of sRGB");
+
+  modalFailure = new Error("Photoshop is busy");
+  await button.listeners.click();
+  assert.equal(status.textContent, "Failed to set foreground color. Please try again.");
+  assert.equal(button.disabled, false);
+  assert.equal(foregroundWrites.length, 2);
+  modalFailure = undefined;
+  assignmentFailure = new Error("Foreground setter failed");
+  await button.listeners.click();
+  assert.equal(status.textContent, "Failed to set foreground color. Please try again.");
+  assert.equal(button.disabled, false);
+  assert.equal(apiErrors.length, 2);
+  assert.equal(foregroundWrites.length, 2);
+  assignmentFailure = undefined;
+
+  edit("chroma", "0");
+  edit("lightness", "0");
+  await button.listeners.click();
+  assert.deepEqual(foregroundWrites[2].rgb, { red: 0, green: 0, blue: 0 });
+  assert.equal(status.textContent, "Foreground color set: #000000");
+  expectOutput(0, 0, 120);
+  console.log("PASS: cached RGB, SolidColor/modal assignment, click-only writes, busy guard, status, API failures and retry");
+}
+
+testForeground().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

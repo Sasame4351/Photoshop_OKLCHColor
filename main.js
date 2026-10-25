@@ -1,6 +1,7 @@
 ﻿const { entrypoints } = require("uxp");
 
 const { oklchToSrgb } = require("./color/oklch.js");
+const { setForegroundColor } = require("./photoshop/foreground.js");
 
 const showAlert = () => {
   alert("This is an alert message");
@@ -24,6 +25,9 @@ const fields = [
   { id: "hue", min: 0, max: 360, value: 250 },
 ];
 
+let currentColor;
+let isSettingForeground = false;
+
 function getPreviewTextColor(color) {
   // Use the quantized sRGB channels represented by the preview's HEX background.
   const linear = [color.r255, color.g255, color.b255].map(channel => {
@@ -43,6 +47,10 @@ function updateOklchText() {
     `oklch(${fields.map(field => field.value).join(" ")})`;
 
   const color = oklchToSrgb(fields[0].value, fields[1].value, fields[2].value);
+  currentColor = color;
+  if (!isSettingForeground) {
+    document.getElementById("foreground-status").textContent = "";
+  }
   document.getElementById("color-preview").style.backgroundColor = color.hex;
   const previewHex = document.getElementById("preview-hex");
   previewHex.textContent = color.hex;
@@ -78,4 +86,27 @@ fields.forEach(field => {
   input.addEventListener("blur", () => updateValue(true));
 });
 
+async function handleSetForegroundColor() {
+  if (isSettingForeground) return;
+
+  const button = document.getElementById("set-foreground");
+  const status = document.getElementById("foreground-status");
+  const color = currentColor;
+  isSettingForeground = true;
+  button.disabled = true;
+  status.textContent = "Setting foreground color...";
+
+  try {
+    await setForegroundColor(color);
+    status.textContent = `Foreground color set: ${color.hex}`;
+  } catch (error) {
+    status.textContent = "Failed to set foreground color. Please try again.";
+    console.error("Failed to set foreground color:", error);
+  } finally {
+    isSettingForeground = false;
+    button.disabled = false;
+  }
+}
+
 updateOklchText();
+document.getElementById("set-foreground").addEventListener("click", handleSetForegroundColor);

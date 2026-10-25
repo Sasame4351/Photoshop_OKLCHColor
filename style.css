@@ -58,3 +58,19 @@ sp-heading {
   margin: 0 0 4px;
   font-size: 12px;
 }
+
+#foreground-actions {
+  margin-top: 12px;
+}
+
+#set-foreground {
+  width: 100%;
+  margin: 0;
+}
+
+#foreground-status {
+  display: block;
+  min-height: 16px;
+  margin-top: 8px;
+  font-size: 12px;
+}
