@@ -1,5 +1,7 @@
 ﻿const { entrypoints } = require("uxp");
 
+const { oklchToSrgb } = require("./color/oklch.js");
+
 const showAlert = () => {
   alert("This is an alert message");
 };
@@ -25,6 +27,13 @@ const fields = [
 function updateOklchText() {
   document.getElementById("oklch-value").textContent =
     `oklch(${fields.map(field => field.value).join(" ")})`;
+
+  const color = oklchToSrgb(fields[0].value, fields[1].value, fields[2].value);
+  document.getElementById("rgb-value").textContent =
+    `RGB: ${color.r255}, ${color.g255}, ${color.b255}`;
+  document.getElementById("hex-value").textContent = `HEX: ${color.hex}`;
+  document.getElementById("gamut-value").textContent =
+    `Gamut: ${color.inGamut ? "sRGB" : "Out of sRGB"}`;
 }
 
 fields.forEach(field => {

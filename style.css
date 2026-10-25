@@ -29,3 +29,13 @@ sp-heading {
   margin-top: 12px;
   font-size: 12px;
 }
+
+#conversion-result {
+  margin-top: 8px;
+}
+
+#conversion-result sp-body {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 12px;
+}
